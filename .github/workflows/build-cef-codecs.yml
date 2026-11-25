@@ -1,0 +1,64 @@
+name: Build CEF 156 (H.264 / AAC Codecs)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cef_branch:
+        description: 'CEF branch (8078 = Chromium 156.0.8078.x)'
+        required: true
+        default: '8078'
+      runner_label:
+        description: 'GitHub Runner label (needs >=120GB free disk, e.g. self-hosted or larger Windows runner)'
+        required: true
+        default: 'windows-latest'
+
+jobs:
+  build-cef:
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 360
+
+    steps:
+      - name: Check disk space
+        shell: pwsh
+        run: |
+          Get-PSDrive C | Select-Object Used,Free | ForEach-Object {
+            "C: Free = $([math]::Round($_.Free / 1GB, 2)) GB"
+          }
+
+      - name: Prepare build directories & depot_tools
+        shell: cmd
+        run: |
+          mkdir C:\code\automate
+          mkdir C:\code\chromium_git
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git C:\code\depot_tools
+          curl -L -o C:\code\automate\automate-git.py https://bitbucket.org/chromiumembedded/cef/raw/master/tools/automate/automate-git.py
+
+      - name: Build CEF x64 with H.264 / AAC (proprietary_codecs=true)
+        shell: cmd
+        env:
+          PATH: C:\code\depot_tools;${{ env.PATH }}
+          DEPOT_TOOLS_WIN_TOOLCHAIN: 0
+          GYP_MSVS_VERSION: 2022
+          GN_DEFINES: is_official_build=true proprietary_codecs=true ffmpeg_branding=Chrome use_thin_lto=false chrome_pgo_phase=0
+        run: |
+          cd C:\code\chromium_git
+          python3 C:\code\automate\automate-git.py ^
+            --download-dir=C:\code\chromium_git ^
+            --depot-tools-dir=C:\code\depot_tools ^
+            --branch=${{ inputs.cef_branch }} ^
+            --minimal-distrib ^
+            --client-distrib ^
+            --x64-build ^
+            --no-debug-build ^
+            --no-debug-tests ^
+            --no-release-tests
+
+      - name: Upload libcef.dll artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libcef-156-codecs-win64
+          path: |
+            C:\code\chromium_git\cef\binary_distrib\*minimal*\Release\libcef.dll
+            C:\code\chromium_git\cef\binary_distrib\*minimal*\Release\*.dll
+            C:\code\chromium_git\cef\binary_distrib\*minimal*\Release\*.bin
+          retention-days: 14
