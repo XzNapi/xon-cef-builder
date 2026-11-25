@@ -28,6 +28,11 @@ jobs:
             "C: Free = $([math]::Round($_.Free / 1GB, 2)) GB"
           }
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Prepare build directories & depot_tools
         shell: cmd
         run: |
@@ -36,16 +41,17 @@ jobs:
           if not exist C:\code\depot_tools git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git C:\code\depot_tools
           curl -L -o C:\code\automate\automate-git.py https://bitbucket.org/chromiumembedded/cef/raw/master/tools/automate/automate-git.py
           call C:\code\depot_tools\update_depot_tools.bat
+          echo C:\code\depot_tools>> %GITHUB_PATH%
 
       - name: Build CEF x64 with H.264 / AAC (proprietary_codecs=true)
         shell: cmd
         env:
-          PATH: C:\code\depot_tools;${{ env.PATH }}
           DEPOT_TOOLS_WIN_TOOLCHAIN: 0
           GYP_MSVS_VERSION: 2022
           GN_DEFINES: is_official_build=true proprietary_codecs=true ffmpeg_branding=Chrome use_thin_lto=false chrome_pgo_phase=0
         run: |
           cd C:\code\chromium_git
+          set PATH=C:\code\depot_tools;%PATH%
           python C:\code\automate\automate-git.py ^
             --download-dir=C:\code\chromium_git ^
             --depot-tools-dir=C:\code\depot_tools ^
